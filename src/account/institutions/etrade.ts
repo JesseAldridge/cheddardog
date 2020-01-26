@@ -35,7 +35,7 @@ export default class Etrade implements Account {
         await this.downloadTransactions(page);
         let ledger = await this.parseTransactions();
         log.line('');
-        return ledger;
+        return new Ledger(balance, []);
     }
 
     private async removeOldTransactionFiles(): Promise<void> {
@@ -95,37 +95,5 @@ export default class Etrade implements Account {
                 resolve(vipToken);
             });
         });
-    }
-
-    private async parseTransactions(): Promise<Ledger> {
-        log.start('reading transactions');
-        const filename = path.join(getDownloadDir(), 'DownloadTxnHistory.csv');
-        let fileContentsBuffer = fs.readFileSync(filename);
-        let fileContents = fileContentsBuffer.toString();
-
-        let match = fileContents.match(/Ending balance as of.*\"(.*)\"(\r\n|\r|\n)/);
-        let balance = 0;
-        if (match !== null && match.length > 1) {
-            balance = Number(match[1]);
-        }
-
-        let index = fileContents.indexOf('Date,Description,Amount,R');
-        fileContents = fileContents.substring(index);
-        log.succeed('statement loaded');
-
-        log.start('parsing transactions');
-        const csvConfig: Partial<CSVParseParam> = {
-            headers: ['date', 'description', 'amount', 'balance'],
-            colParser: {
-                date: (item: string) => new Date(item),
-                amount: (item: string) => parseFloat(item)
-            },
-            ignoreColumns: /balance/
-        };
-        let temp = await csvtojson(csvConfig).fromString(fileContents);
-        let txns = temp.map(t => new Transaction(t.date, t.description, t.amount));
-        log.succeed(`loaded ${txns.length} transactions`);
-
-        return new Ledger(balance, txns);
     }
 }
