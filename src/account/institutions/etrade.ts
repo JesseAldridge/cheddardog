@@ -33,6 +33,7 @@ export default class Etrade implements Account {
         await this.login(page);
         let balance = await this.getBalance(page);
         await this.downloadTransactions(page);
+        log.succeed('transactions downloaded');
         log.line('');
         return new Ledger(balance, []);
     }
@@ -77,13 +78,10 @@ export default class Etrade implements Account {
 
     async downloadTransactions(page: Page): Promise<void> {
         await page.goto('https://us.etrade.com/e/t/invest/downloadofxtransactions?fp=TH');
-        log.line('waiting for downloading link')
         await page.waitForSelector('input[value="msexcel"]', {visible: true})
         await page.click('input[value="msexcel"]')
-        log.line('clicked excel')
         await page.waitForSelector('input[alt="Download"]', {visible: true})
         await page.click('input[alt="Download"]')
-        log.line('clicked download')
         await sleep(1000)
     }
 

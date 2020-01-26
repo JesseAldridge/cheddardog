@@ -3,7 +3,7 @@ import puppeteer from 'puppeteer';
 import packageInfo from '../../package.json';
 
 const launchParams = {
-    headless: false,
+    headless: true,
     defaultViewport: {
         width: 1280,
         height: 1024
