@@ -30,7 +30,9 @@ export default class Etrade implements Account {
     public async getLedger(page: Page): Promise<Ledger> {
         log.title('Fetching Etrade Ledger');
         await this.removeOldTransactionFiles();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36');
         await this.login(page);
+        // await page.screenshot({path: 'example.png'});
         let balance = await this.getBalance(page);
         await this.downloadTransactions(page);
         log.succeed('transactions downloaded');
