@@ -1,4 +1,7 @@
-import { BrowserUtil, log } from '../../util';
+import path from 'path';
+import shell from 'shelljs';
+
+import { BrowserUtil, log, sleep, getDownloadDir } from '../../util';
 import { Page } from 'puppeteer';
 import Account from '../account';
 import Ledger from '../ledger';
@@ -26,10 +29,20 @@ export default class Etrade implements Account {
 
     public async getLedger(page: Page): Promise<Ledger> {
         log.title('Fetching Etrade Ledger');
+        await this.removeOldTransactionFiles();
         await this.login(page);
         let balance = await this.getBalance(page);
+        await this.downloadTransactions(page);
+        let ledger = await this.parseTransactions();
         log.line('');
-        return new Ledger(balance, []);
+        return ledger;
+    }
+
+    private async removeOldTransactionFiles(): Promise<void> {
+        const globName = path.join(getDownloadDir(), 'DownloadTxnHistory.csv');
+        log.start(`rm -rf ${globName}`);
+        shell.rm('-rf', globName);
+        log.succeed(`rm -rf ${globName}`);
     }
 
     private async login(page: Page): Promise<void> {
@@ -48,9 +61,9 @@ export default class Etrade implements Account {
             );
         }
 
-        let pw = `${password}${await this.getVipToken(page)}`;
+        // let pw = `${password}${await this.getVipToken(page)}`;
 
-        await BrowserUtil.simpleLogin(page, pageUrl, username, pw, usernameSelector, passwordSelector, submitSelector);
+        await BrowserUtil.simpleLogin(page, pageUrl, username, password, usernameSelector, passwordSelector, submitSelector);
     }
 
     async getBalance(page: Page): Promise<number> {
@@ -63,6 +76,18 @@ export default class Etrade implements Account {
         return balance;
     }
 
+    async downloadTransactions(page: Page): Promise<void> {
+        await page.goto('https://us.etrade.com/e/t/invest/downloadofxtransactions?fp=TH');
+        log.line('waiting for downloading link')
+        await page.waitForSelector('input[value="msexcel"]', {visible: true})
+        await page.click('input[value="msexcel"]')
+        log.line('clicked excel')
+        await page.waitForSelector('input[alt="Download"]', {visible: true})
+        await page.click('input[alt="Download"]')
+        log.line('clicked download')
+        await sleep(1000)
+    }
+
     async getVipToken(page: Page): Promise<string> {
         await page.setContent(html, { waitUntil: 'networkidle2' });
         return await new Promise<string>(resolve => {
@@ -70,5 +95,37 @@ export default class Etrade implements Account {
                 resolve(vipToken);
             });
         });
+    }
+
+    private async parseTransactions(): Promise<Ledger> {
+        log.start('reading transactions');
+        const filename = path.join(getDownloadDir(), 'DownloadTxnHistory.csv');
+        let fileContentsBuffer = fs.readFileSync(filename);
+        let fileContents = fileContentsBuffer.toString();
+
+        let match = fileContents.match(/Ending balance as of.*\"(.*)\"(\r\n|\r|\n)/);
+        let balance = 0;
+        if (match !== null && match.length > 1) {
+            balance = Number(match[1]);
+        }
+
+        let index = fileContents.indexOf('Date,Description,Amount,R');
+        fileContents = fileContents.substring(index);
+        log.succeed('statement loaded');
+
+        log.start('parsing transactions');
+        const csvConfig: Partial<CSVParseParam> = {
+            headers: ['date', 'description', 'amount', 'balance'],
+            colParser: {
+                date: (item: string) => new Date(item),
+                amount: (item: string) => parseFloat(item)
+            },
+            ignoreColumns: /balance/
+        };
+        let temp = await csvtojson(csvConfig).fromString(fileContents);
+        let txns = temp.map(t => new Transaction(t.date, t.description, t.amount));
+        log.succeed(`loaded ${txns.length} transactions`);
+
+        return new Ledger(balance, txns);
     }
 }
