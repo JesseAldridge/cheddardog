@@ -33,7 +33,6 @@ export default class Etrade implements Account {
         await this.login(page);
         let balance = await this.getBalance(page);
         await this.downloadTransactions(page);
-        let ledger = await this.parseTransactions();
         log.line('');
         return new Ledger(balance, []);
     }

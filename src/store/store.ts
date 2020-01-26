@@ -42,6 +42,8 @@ const mergeFilename = path.join('./out/', 'txndb.merged.json');
 
 export default class Store {
     static load(): Map<Account, Ledger> {
+        if(!fs.existsSync(dbFilename))
+            return new Map() as Map<Account, Ledger>;
         let jsonStr = fs.readFileSync(dbFilename, { encoding: 'utf-8' });
         let data = new Map(JSON.parse(jsonStr, reviver));
         return data as Map<Account, Ledger>;
